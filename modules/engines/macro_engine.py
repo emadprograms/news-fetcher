@@ -150,16 +150,9 @@ def run_macro_scan(target_date, max_pages, log_callback, db=None, cache_map=None
     # If existing_titles passed, we use it for checking dupes
     if existing_titles is None:
         if db:
-            # 🛡️ DEDUPLICATION UPGRADE: Check 3-Day Window (Today, Yesterday, Day Before)
-            seen_today = db.fetch_existing_titles(target_date)
-            yesterday = target_date - datetime.timedelta(days=1)
-            seen_yesterday = db.fetch_existing_titles(yesterday)
-            day_before = target_date - datetime.timedelta(days=2)
-            seen_day_before = db.fetch_existing_titles(day_before)
-            
-            # Merge (Today overrides older, but keys are normalized so it's fine)
-            seen_titles = {**seen_day_before, **seen_yesterday, **seen_today}
-            log_callback(f"🔍 DEDUP CONTEXT: Loaded {len(seen_today)} (T) + {len(seen_yesterday)} (T-1) + {len(seen_day_before)} (T-2).")
+            # 🛡️ DEDUPLICATION: Load titles for session window (single query)
+            seen_titles = db.fetch_existing_titles(target_date)
+            log_callback(f"🔍 DEDUP CONTEXT: Loaded {len(seen_titles)} titles from DB.")
         else:
             seen_titles = {}
     else:
@@ -284,37 +277,20 @@ def run_macro_scan(target_date, max_pages, log_callback, db=None, cache_map=None
                         if pub_date_only != target_date:
                             continue
                     
-                    # URL RESOLUTION (Early for Dedupe)
-                    real_url = market_utils.decode_google_news_url(google_link)
-                    clean_url = real_url.split('?')[0]
-
-                    # 🛑 GLOBAL DB CHECK (The Ultimate Truth)
-                    # We must check REAL_URL because that's what we store (with params like ?oc=5)
-                    found_db_id = None
-                    if db:
-                        # Check FULL URL first
-                        found_db_id = db.article_exists(real_url, title)
-                        if not found_db_id:
-                            # Fallback: Check CLEAN URL
-                            found_db_id = db.article_exists(clean_url, title)
-
-                        # DEBUG: Just keep one simple log if found
-                        # log_callback(f"� DEBUG: Checked {clean_url[:30]}... Result: {found_db_id}")
-
-                    if found_db_id:
-                         log_callback(f"│   └── ⏭️ Skipping '{title[:30]}...' (Found in DB Row #{found_db_id})")
-                         continue 
-
-
-
-                    # Normalize Title (Match DB behavior)
+                    # Normalize Title FIRST (Fast in-memory check before URL resolution)
                     norm_title = market_utils.normalize_title(title).lower()
                     
-                    # Local Cache Check (Fast Fail)
+                    # 🚀 IN-MEMORY DEDUP CHECK (Free - no DB round-trip)
+                    # The in-memory seen_titles dict + INSERT OR IGNORE on UNIQUE url
+                    # provides the same safety as article_exists() without per-item DB reads.
                     if norm_title in seen_titles: 
                         db_id = seen_titles[norm_title] if isinstance(seen_titles, dict) else "?"
                         log_callback(f"│   └── ⏭️ Skipping: '{title[:40]}...' (Found in Cache Row #{db_id})")
                         continue
+
+                    # URL RESOLUTION (Only for articles that pass title dedup)
+                    real_url = market_utils.decode_google_news_url(google_link)
+                    clean_url = real_url.split('?')[0]
     
                     # 🚫 FAST TITLE BLOCKLIST (Catch them before URL resolve)
                     t_low = title.lower()
@@ -408,11 +384,9 @@ def run_macro_scan(target_date, max_pages, log_callback, db=None, cache_map=None
                         continue
                     # seen_urls.add(clean_url) <-- MOVED: Only add AFTER success
                     
-                    # CACHE CHECK
+                    # CACHE CHECK (URL already in DB for this session)
                     if cache_map and clean_url in cache_map:
-                        cached_item = cache_map[clean_url]
-                        found_reports.append(cached_item)
-                        log_callback(f"│   │   └── 💾 CACHE HIT. Skipping.")
+                        log_callback(f"│   │   └── 💾 CACHE HIT: Already in DB. Skipping.")
                         continue
 
                     # BROWSER FETCH (Using shared Yahoo fetcher)

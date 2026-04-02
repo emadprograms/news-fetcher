@@ -174,27 +174,12 @@ class MarketAuxEngine:
                             pass
                         
                         
-                        # 🛑 GLOBAL DB CHECK (Ultimate Truth)
-                        # Check REAL URL first (what we save), then CLEAN URL (params stripped)
-                        clean_url = url.split('?')[0] # Check without tracking params
-                        
-                        found_db_id = None
-                        if db:
-                            found_db_id = db.article_exists(url, title)
-                            if not found_db_id:
-                                found_db_id = db.article_exists(clean_url, title)
-
-                        if found_db_id:
-                             self.log_callback(f"│   └── ⏭️ Skipping '{title[:30]}...' (Found in DB Row #{found_db_id})")
+                        # 🚀 URL DEDUP: In-memory check replaces per-article DB query.
+                        # INSERT OR IGNORE on UNIQUE url column is the DB-level safety net.
+                        clean_url = url.split('?')[0]
+                        if cache_map and (url in cache_map or clean_url in cache_map):
+                             self.log_callback(f"│   └── ⏭️ Skipping '{title[:30]}...' (URL in session cache)")
                              continue
-                        
-                        # Cache Check
-                        if cache_map and url in cache_map:
-                            ticker_reports.append(cache_map[url])
-                            all_final_reports.append(cache_map[url])
-                            # self.log_callback(f"│   ├── 💾 CACHE HIT: {title[:30]}...") # Silent Cache hit if redundant? No, show it.
-                            self.log_callback(f"│   ├── 💾 CACHE HIT: Already in DB.")
-                            continue
                             
                         self.log_callback(f"│   ├── 🔹 NEW LEAD: {title[:40]}...")
                         

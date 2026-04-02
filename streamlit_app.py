@@ -342,11 +342,13 @@ def main():
         
         all_found = {}
 
+        # 🚀 OPTIMIZATION: Load dedup context ONCE and reuse across all scan phases.
+        cache = {} if force_fresh else db.fetch_cache_map(selected_date, None)
+        titles = {} if force_fresh else db.fetch_existing_titles(selected_date)
+
         # 1. Macro Scan
         if enable_macro or (is_resume and r_info['type'] == 'MACRO'):
             update_log("🌍 Starting Macro Phase...")
-            cache = {} if force_fresh else db.fetch_cache_map(selected_date, None)
-            titles = set() if force_fresh else db.fetch_existing_titles(selected_date)
             
             manual_feeds = None
             if sel_evts:
@@ -363,23 +365,25 @@ def main():
                 cat = r.get('category', 'MACRO')
                 if cat not in all_found: all_found[cat] = []
                 all_found[cat].append(r)
+                # Merge into shared dedup context
+                norm_t = market_utils.normalize_title(r.get('title', '')).lower()
+                titles[norm_t] = "macro_phase"
+                if r.get('url'): cache[r['url']] = True
 
         # 2. Earnings Injection (MarketAux)
         if earn_evts and sel_earn:
             update_log(f"🕵️ Hunting Earnings for: {', '.join(sel_earn)}")
             ma_keys = infisical.get_marketaux_keys()
             if ma_keys:
-                e_res = marketaux_engine.run_marketaux_scan(ma_keys, selected_date, sel_earn, update_log, db=db, headless=headless)
+                e_res = marketaux_engine.run_marketaux_scan(ma_keys, selected_date, sel_earn, update_log, db=db, cache_map=cache, existing_titles=titles, headless=headless)
                 for r in e_res:
                     cat = "EARNINGS_HUNT"
                     if cat not in all_found: all_found[cat] = []
                     all_found[cat].append(r)
 
-        # 3. Stock Scan
+        # 3. Stock Scan (reuses shared dedup context — no DB reload)
         if enable_stocks or (is_resume and r_info['type'] == 'STOCKS'):
             update_log("📈 Starting Market Phase...")
-            cache = {} if force_fresh else db.fetch_cache_map(selected_date, None)
-            titles = set() if force_fresh else db.fetch_existing_titles(selected_date)
             s_res = stocks_engine.run_stocks_scan(
                 selected_date, depth, update_log, db=db, cache_map=cache,
                 existing_titles=titles, target_subset=selected_stocks, headless=headless,
@@ -389,15 +393,19 @@ def main():
                 cat = r.get('category', 'EQUITIES')
                 if cat not in all_found: all_found[cat] = []
                 all_found[cat].append(r)
+                # Merge into shared dedup context
+                norm_t = market_utils.normalize_title(r.get('title', '')).lower()
+                titles[norm_t] = "stocks_phase"
+                if r.get('url'): cache[r['url']] = True
 
-        # 4. Company Scan
+        # 4. Company Scan (reuses shared dedup context)
         if enable_company or (is_resume and r_info['type'] == 'COMPANY'):
             update_log("🏢 Starting Watchlist Phase...")
             ma_keys = infisical.get_marketaux_keys()
             if ma_keys:
                 c_res = marketaux_engine.run_marketaux_scan(
                     ma_keys, selected_date, sel_watch if not is_resume else r_info['remaining'], 
-                    update_log, db=db, headless=headless
+                    update_log, db=db, cache_map=cache, existing_titles=titles, headless=headless
                 )
                 for r in c_res:
                     cat = r.get('category', 'COMPANY')

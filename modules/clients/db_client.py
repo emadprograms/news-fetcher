@@ -75,6 +75,10 @@ class NewsDatabase:
             self.client.execute(sql_create)
             # Index on Category/Date for speed
             self.client.execute("CREATE INDEX IF NOT EXISTS idx_cat_date ON market_news(category, published_at);")
+            # Index on title for fast dedup lookups (avoids full table scan)
+            self.client.execute("CREATE INDEX IF NOT EXISTS idx_title ON market_news(title);")
+            # Index on URL for fast existence checks
+            self.client.execute("CREATE INDEX IF NOT EXISTS idx_url ON market_news(url);")
         except Exception as e:
             print(f"❌ Schema Init Error: {e}")
 
@@ -214,55 +218,52 @@ class NewsDatabase:
         """
         Retrieves news from DB for a specific date.
         If category is None, returns ALL categories.
+        Uses range query instead of date() function to leverage indexes.
         """
         if not self.client: return []
         
+        # Range query: published_at >= 'YYYY-MM-DD' AND published_at < 'YYYY-MM-DD+1'
+        # This allows index usage unlike date(published_at) which forces full table scan
         target_date_str = date_obj.strftime("%Y-%m-%d")
+        next_day = date_obj + datetime.timedelta(days=1)
+        next_day_str = next_day.strftime("%Y-%m-%d")
         
         if category:
             sql = """
             SELECT title, url, content, published_at, source_domain, category, publisher
             FROM market_news 
             WHERE category = ? 
-            AND date(published_at) = ?
+            AND published_at >= ? AND published_at < ?
             AND category != 'HIDDEN'
             AND publisher != 'BLOCKED'
             ORDER BY published_at DESC
             """
-            params = [category, target_date_str]
+            params = [category, target_date_str, next_day_str]
         else:
             sql = """
             SELECT title, url, content, published_at, source_domain, category, publisher
             FROM market_news 
-            WHERE date(published_at) = ?
+            WHERE published_at >= ? AND published_at < ?
             AND category != 'HIDDEN'
             AND publisher != 'BLOCKED'
             ORDER BY published_at DESC
             """
-            params = [target_date_str]
+            params = [target_date_str, next_day_str]
         
         try:
             rs = self.client.execute(sql, params)
             results = []
             for row in rs.rows:
-                # Reconstruct dict to match engine output
-                # row structure: (title, url, content, published_at, source_domain, cat, publisher)
-                # content is stored as string in DB, engine returns list. Splitting by newline for compatibility.
                 content_str = row[2]
                 content_list = content_str.split("\n") if content_str else []
                 
-                # Format time string for UI (HH:MM style)
                 try:
-                    # Robust parsing using dateutil
                     dt = dt_parser.parse(row[3])
-                    
-                    # Convert to UTC
                     dt_utc = dt.astimezone(datetime.timezone.utc)
                     time_str = dt_utc.strftime("%H:%M UTC").strip()
                 except:
                     time_str = "??:??"
 
-                # Get publisher (index 6)
                 publisher_val = row[6] if len(row) > 6 and row[6] else "Unknown"
 
                 results.append({
@@ -281,44 +282,44 @@ class NewsDatabase:
             return []
 
     def fetch_cache_map(self, date_obj, category=None):
-        """ Returns a dict of {url: item} for the given date. """
-        results = self.fetch_news_by_date(date_obj, category)
-        cache_map = {}
-        for item in results:
-            url = item.get('url')
-            if url:
-                cache_map[url] = item
-        return cache_map
+        """
+        Returns a lightweight dict of {url: True} for the given date.
+        Used for fast URL deduplication without loading full article content.
+        """
+        if not self.client: return {}
+        
+        target_date_str = date_obj.strftime("%Y-%m-%d")
+        next_day = date_obj + datetime.timedelta(days=1)
+        next_day_str = next_day.strftime("%Y-%m-%d")
+        
+        if category:
+            sql = "SELECT url FROM market_news WHERE category = ? AND published_at >= ? AND published_at < ?"
+            params = [category, target_date_str, next_day_str]
+        else:
+            sql = "SELECT url FROM market_news WHERE published_at >= ? AND published_at < ?"
+            params = [target_date_str, next_day_str]
+        
+        try:
+            rs = self.client.execute(sql, params)
+            return {row[0]: True for row in rs.rows if row[0]}
+        except Exception as e:
+            print(f"⚠️ Fetch Cache Map Error: {e}")
+            return {}
 
     def fetch_existing_titles(self, date_obj):
         """ Returns a DICT of {normalized_title: id} for the given date for fast deduplication. """
         if not self.client: return {}
-        target_iso = date_obj.strftime("%Y-%m-%d")
+        # Range query instead of LIKE for index usage
+        target_date_str = date_obj.strftime("%Y-%m-%d")
+        next_day = date_obj + datetime.timedelta(days=1)
+        next_day_str = next_day.strftime("%Y-%m-%d")
         try:
-            # Use WHERE clause to filter at the DB level (much faster than loading all rows)
-            sql = "SELECT id, title, published_at FROM market_news WHERE published_at LIKE ? || '%'"
-            rs = self.client.execute(sql, [target_iso])
+            sql = "SELECT id, title FROM market_news WHERE published_at >= ? AND published_at < ?"
+            rs = self.client.execute(sql, [target_date_str, next_day_str])
             titles_map = {}
-            
             for row in rs.rows:
-                row_id = row[0]
-                t = row[1]
-                pub_at = row[2]
-                
-                # Verify date match (handles edge cases with timezone offsets)
-                try:
-                    if pub_at and pub_at.startswith(target_iso):
-                        match = True
-                    else:
-                        dt = dt_parser.parse(pub_at)
-                        match = dt.date() == date_obj
-                except Exception:
-                    match = False
-                
-                if match:
-                    norm_t = market_utils.normalize_title(t).lower()
-                    titles_map[norm_t] = row_id
-                
+                norm_t = market_utils.normalize_title(row[1]).lower()
+                titles_map[norm_t] = row[0]
             return titles_map
         except Exception as e:
             print(f"⚠️ Fetch Existing Titles Error: {e}")
@@ -528,28 +529,49 @@ class NewsDatabase:
     def article_exists(self, url, title=None):
         """
         Checks if an article exists by URL (PRIMARY) or Title (FALLBACK).
-        Ignores date - checks entire history.
+        Uses a single combined query with OR to minimize round-trips.
+        Both url and title columns are now indexed.
         """
         if not self.client: return False
         
         try:
-            # Check URL first (Fast, Indexed)
-            sql = "SELECT id FROM market_news WHERE url = ?"
-            rs = self.client.execute(sql, [url])
-            if rs.rows: 
-                return rs.rows[0][0]
-            
-            # Check Title (slower, but catches URL variations)
             if title:
-                sql_t = "SELECT id FROM market_news WHERE title = ?"
-                rs_t = self.client.execute(sql_t, [title])
-                if rs_t.rows: 
-                    return rs_t.rows[0][0]
+                # Single query: check URL OR Title in one round-trip
+                sql = "SELECT id FROM market_news WHERE url = ? OR title = ? LIMIT 1"
+                rs = self.client.execute(sql, [url, title])
+            else:
+                sql = "SELECT id FROM market_news WHERE url = ? LIMIT 1"
+                rs = self.client.execute(sql, [url])
             
+            if rs.rows:
+                return rs.rows[0][0]
             return False
         except Exception as e:
             print(f"⚠️ Existence Check Error: {e}")
             return False
+
+    def batch_urls_exist(self, urls):
+        """
+        Bulk check: Returns a set of URLs that already exist in the database.
+        Much more efficient than checking one-by-one.
+        """
+        if not self.client or not urls: return set()
+        
+        existing = set()
+        try:
+            # Process in batches of 50 to avoid query size limits
+            url_list = list(urls)
+            for i in range(0, len(url_list), 50):
+                batch = url_list[i:i+50]
+                placeholders = ','.join(['?' for _ in batch])
+                sql = f"SELECT url FROM market_news WHERE url IN ({placeholders})"
+                rs = self.client.execute(sql, batch)
+                for row in rs.rows:
+                    existing.add(row[0])
+            return existing
+        except Exception as e:
+            print(f"⚠️ Batch URL Check Error: {e}")
+            return set()
 
     def get_last_update_time(self):
         """ Returns the timestamp of the most recently added news item. """

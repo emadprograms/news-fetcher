@@ -274,14 +274,18 @@ def run_automation(run_number=1, max_runs=3):
 
     # (Removed unused articles_before snapshot — each scan tracks its own before/after)
 
+    # 🚀 OPTIMIZATION: Load dedup context ONCE and reuse across all scan phases.
+    # After each scan, merge newly found titles into existing_titles so subsequent
+    # phases have fresh dedup data without re-querying the database.
+    iso_start = lookback_start.isoformat()
+    iso_end = lookback_end.isoformat()
+    existing_titles = db.fetch_existing_titles_range(iso_start, iso_end)
+    cache = db.fetch_cache_map(target_date, None)
+    update_log(f"📦 Dedup Context Loaded: {len(existing_titles)} titles, {len(cache)} cached URLs.")
+
     # 2. Run Macro Scan
     try:
         update_log("\U0001f30d Starting Macro Scan...")
-        # Range-based dedup: covers entire session window (critical for weekend leaps)
-        iso_start = lookback_start.isoformat()
-        iso_end = lookback_end.isoformat()
-        existing_titles = db.fetch_existing_titles_range(iso_start, iso_end)
-        cache = db.fetch_cache_map(target_date, None)
         macro_result = macro_engine.run_macro_scan(
             target_date, 
             max_pages=5, 
@@ -302,6 +306,13 @@ def run_automation(run_number=1, max_runs=3):
         else:
             macro_articles = macro_result if macro_result else []  # Legacy fallback
         report["macro"] = len(macro_articles)
+        # Merge newly found titles into shared dedup context for next phase
+        for art in macro_articles:
+            norm_t = market_utils.normalize_title(art.get('title', '')).lower()
+            existing_titles[norm_t] = "macro_phase"
+            url = art.get('url')
+            if url:
+                cache[url] = True
         # Check for headline-only ratio (driver issues indicator)
         if macro_articles:
             timeout_count = sum(1 for a in macro_articles if a.get("publisher", "") in ["Unknown (Timeout)", "Unknown (Error)"])
@@ -314,12 +325,9 @@ def run_automation(run_number=1, max_runs=3):
         update_log(f"\u274c Macro Scan Failed: {e}")
         report["errors"].append(f"Macro scan crashed: {e}")
 
-    # 3. Run Stocks Scan
+    # 3. Run Stocks Scan (reuses existing_titles + cache from macro phase — no DB reload)
     try:
         update_log("\U0001f4c8 Starting Stocks Scan...")
-        # Refresh dedup context (macro may have added articles)
-        existing_titles = db.fetch_existing_titles_range(iso_start, iso_end)
-        cache = db.fetch_cache_map(target_date, None)
         stocks_result = stocks_engine.run_stocks_scan(
             target_date, 
             max_pages=5, 
@@ -340,6 +348,13 @@ def run_automation(run_number=1, max_runs=3):
         else:
             stocks_articles = stocks_result if stocks_result else []  # Legacy fallback
         report["stocks"] = len(stocks_articles)
+        # Merge newly found titles into shared dedup context for company phase
+        for art in stocks_articles:
+            norm_t = market_utils.normalize_title(art.get('title', '')).lower()
+            existing_titles[norm_t] = "stocks_phase"
+            url = art.get('url')
+            if url:
+                cache[url] = True
         # Check for headline-only ratio
         if stocks_articles:
             timeout_count = sum(1 for a in stocks_articles if a.get("publisher", "") in ["Unknown (Timeout)", "Unknown (Error)"])
@@ -352,7 +367,7 @@ def run_automation(run_number=1, max_runs=3):
         update_log(f"\u274c Stocks Scan Failed: {e}")
         report["errors"].append(f"Stocks scan crashed: {e}")
 
-    # 4. Run Company Specific Scan (MarketAux)
+    # 4. Run Company Specific Scan (MarketAux) — reuses shared dedup context
     try:
         update_log("🏢 Starting Company Specific Scan...")
         ma_keys = infisical.get_marketaux_keys()

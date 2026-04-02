@@ -214,16 +214,10 @@ def run_stocks_scan(target_date, max_pages, log_callback, db=None, cache_map=Non
                     real_url = market_utils.decode_google_news_url(google_link)
                     clean_url = real_url.split('?')[0]
 
-                    # 🛑 GLOBAL DB CHECK (The Ultimate Truth)
-                    # Check REAL_URL (what we save) then CLEAN_URL (fallback)
-                    found_db_id = None
-                    if db:
-                        found_db_id = db.article_exists(real_url, title)
-                        if not found_db_id:
-                            found_db_id = db.article_exists(clean_url, title)
-
-                    if found_db_id:
-                         log_callback(f"│   └── ⏭️ Skipping '{title[:30]}...' (Found in DB Row #{found_db_id})")
+                    # 🚀 URL DEDUP: In-memory check replaces per-article DB query.
+                    # INSERT OR IGNORE on UNIQUE url column is the DB-level safety net.
+                    if clean_url in seen_urls or real_url in seen_urls:
+                         log_callback(f"│   └── ⏭️ Skipping '{title[:30]}...' (URL in session cache)")
                          continue
 
                     # 🛑 STRICT PRE-FLIGHT DOMAIN CHECK
@@ -263,14 +257,8 @@ def run_stocks_scan(target_date, max_pages, log_callback, db=None, cache_map=Non
 
 
                     if clean_url in seen_urls: 
-                        # 🔹 CHECK CACHE FIRST
-                        if cache_map and clean_url in cache_map:
-                            cached_item = cache_map[clean_url]
-                            log_callback(f"│   │   └── 💾 CACHE HIT: Already in DB. Skipping fetch.")
-                            found_reports.append(cached_item)
-                        else:
-                             log_callback(f"│   └── ⏭️ Skipping duplicate URL (Session Cache).")
-                        continue
+                         log_callback(f"│   └── ⏭️ Skipping duplicate URL (Session Cache).")
+                         continue
                     # seen_urls.add(clean_url) <-- MOVED: Only add AFTER success
                     
                     url_valid = False
@@ -612,16 +600,10 @@ def run_company_specific_scan(target_date, ticker_list, max_pages, log_callback,
                     real_url = market_utils.decode_google_news_url(google_link)
                     clean_url = real_url.split('?')[0]
                     
-                    # 🛑 GLOBAL DB CHECK
-                    # Check REAL_URL (what we save) then CLEAN_URL (fallback)
-                    found_db_id = None
-                    if db:
-                        found_db_id = db.article_exists(real_url, title)
-                        if not found_db_id:
-                            found_db_id = db.article_exists(clean_url, title)
-
-                    if found_db_id:
-                         log_callback(f"│   └── ⏭️ Skipping '{title[:30]}...' (Found in DB Row #{found_db_id})")
+                    # 🚀 URL DEDUP: In-memory check replaces per-article DB query.
+                    # INSERT OR IGNORE on UNIQUE url column is the DB-level safety net.
+                    if clean_url in seen_urls or real_url in seen_urls:
+                         log_callback(f"│   └── ⏭️ Skipping '{title[:30]}...' (URL in session cache)")
                          continue
                     
                     # 🛑 STRICT PRE-FLIGHT DOMAIN CHECK
@@ -636,13 +618,8 @@ def run_company_specific_scan(target_date, ticker_list, max_pages, log_callback,
                         pass
 
                     if clean_url in seen_urls: 
-                        if cache_map and clean_url in cache_map:
-                             # Cache Hit Logic (Strict Check also applies to cache?)
-                             found_reports.append(cache_map[clean_url])
-                             log_callback(f"│   │   └── 💾 CACHE HIT.")
-                        else:
-                             log_callback(f"│   └── ⏭️ Skipping duplicate URL.")
-                        continue
+                         log_callback(f"│   └── ⏭️ Skipping duplicate URL (Session Cache).")
+                         continue
                     seen_urls.add(clean_url)
 
                     url_valid = False

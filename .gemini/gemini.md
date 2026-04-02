@@ -33,6 +33,33 @@ A sophisticated news aggregation and analysis system designed for financial mark
 - **Tools Usage:** Always use the `tools/` folder for any new scripts, debugging, or investigative code. This keeps the root directory clean and provides a centralized place for project utilities.
 - **Modular Design:** Keep scraping logic in `engines/` and infrastructure logic in `clients/`.
 
+## Database Optimization (Turso Read Reduction)
+
+The following patterns are critical for keeping Turso cloud read costs low. **All DB queries MUST follow these rules:**
+
+### Query Rules
+- **NEVER use `date(published_at)` in WHERE clauses.** The `date()` function prevents index usage and forces a full table scan. Always use range queries instead: `WHERE published_at >= ? AND published_at < ?` (next day).
+- **NEVER use `LIKE ? || '%'` for date filtering.** Use range queries for the same reason.
+- **NEVER call `article_exists()` inside per-item loops.** Use in-memory dedup (`seen_titles` dict + `seen_urls` set) instead. The `INSERT OR IGNORE` on the UNIQUE `url` column is the DB-level safety net.
+- **`fetch_cache_map()` is lightweight.** It returns `{url: True}`, NOT full article dicts. Do not try to append cache_map values as article objects.
+
+### Dedup Architecture
+- **Load dedup context ONCE** at the start of a hunt session (`existing_titles` + `cache_map`), then pass both through all scan phases (Macro → Stocks → Company).
+- **Merge new articles in-memory** after each phase: add newly found titles to `existing_titles` and URLs to `cache` so subsequent phases have fresh dedup without re-querying the database.
+- **Engine fallback loading** (`fetch_existing_titles`) uses a single-date range query, NOT the old 3-day window with 3 separate queries.
+
+### Indexes
+- `idx_cat_date` on `(category, published_at)` — primary query index
+- `idx_title` on `(title)` — dedup lookups (prevents full table scan on title checks)
+- `idx_url` on `(url)` — existence checks
+
+### Key Methods
+- `article_exists(url, title)`: Combined single query using `OR` (1 round-trip instead of 2).
+- `batch_urls_exist(urls)`: Bulk URL existence check using `IN (...)` in batches of 50.
+- `fetch_cache_map(date)`: Returns `{url: True}` — only fetches URL column, not full content.
+- `fetch_existing_titles(date)`: Returns `{normalized_title: id}` using range query.
+- `fetch_existing_titles_range(start, end)`: Same but for session windows spanning multiple days.
+
 ## Common Commands
 - **Run Dashboard:** `streamlit run streamlit_app.py`
 - **Run Automation:** `python main.py`
