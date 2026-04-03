@@ -31,6 +31,56 @@ def run_async(coro):
 class TestDateValidation(unittest.TestCase):
     """Tests the date validation logic in bot commands."""
 
+    def test_get_target_date_none(self):
+        """None input should return None to trigger interactive UI."""
+        from discord_bot.bot import get_target_date
+        self.assertIsNone(get_target_date(None))
+
+    def test_get_target_date_today(self):
+        """'0' should return today's UTC date string."""
+        from discord_bot.bot import get_target_date
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        self.assertEqual(get_target_date("0"), today)
+
+    def test_get_target_date_relative(self):
+        """'-1', '-5' should return correct past dates in UTC."""
+        from discord_bot.bot import get_target_date
+        yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+        self.assertEqual(get_target_date("-1"), yesterday)
+        
+        five_days_back = (datetime.now(timezone.utc) - timedelta(days=5)).strftime("%Y-%m-%d")
+        self.assertEqual(get_target_date("-5"), five_days_back)
+
+    def test_get_target_date_passthrough(self):
+        """'2026-02-20' should pass through as a string for validation later."""
+        from discord_bot.bot import get_target_date
+        self.assertEqual(get_target_date("2026-02-20"), "2026-02-20")
+
+    def test_get_target_date_none(self):
+        """None input should return None to trigger interactive UI."""
+        from discord_bot.bot import get_target_date
+        self.assertIsNone(get_target_date(None))
+
+    def test_get_target_date_today(self):
+        """'0' should return today's UTC date string."""
+        from discord_bot.bot import get_target_date
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        self.assertEqual(get_target_date("0"), today)
+
+    def test_get_target_date_relative(self):
+        """'-1', '-5' should return correct past dates in UTC."""
+        from discord_bot.bot import get_target_date
+        yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+        self.assertEqual(get_target_date("-1"), yesterday)
+        
+        five_days_back = (datetime.now(timezone.utc) - timedelta(days=5)).strftime("%Y-%m-%d")
+        self.assertEqual(get_target_date("-5"), five_days_back)
+
+    def test_get_target_date_passthrough(self):
+        """'2026-02-20' should pass through as a string for validation later."""
+        from discord_bot.bot import get_target_date
+        self.assertEqual(get_target_date("2026-02-20"), "2026-02-20")
+
     def test_valid_date_parses(self):
         parsed = datetime.strptime("2026-02-20", "%Y-%m-%d")
         self.assertEqual(parsed.year, 2026)
@@ -131,18 +181,20 @@ class TestTriggerFetchCommand(unittest.TestCase):
         call_content = self.ctx.send.call_args[0][0]
         self.assertIn("too far in the future", call_content)
 
-    def test_no_date_dispatches_without_inputs(self):
-        """!rawnews with no date should dispatch without inputs.target_date."""
-        data = {"ref": "main"}
-        target_date = None
-        if target_date:
-            data["inputs"] = {"target_date": target_date}
-        
-        self.assertNotIn("inputs", data)
-        self.assertEqual(data["ref"], "main")
+    def test_no_date_sends_view(self):
+        """!rawnews with no date should send the interactive view instead of dispatching."""
+        async def _test():
+            from discord_bot.bot import cmd_trigger_fetch, DateSelectionView
+            await cmd_trigger_fetch(self.ctx, None)
+            
+        run_async(_test())
+        self.ctx.send.assert_called_once()
+        call_kwargs = self.ctx.send.call_args[1]
+        self.assertIn('view', call_kwargs)
+        self.assertEqual(type(call_kwargs['view']).__name__, "DateSelectionView")
 
     def test_valid_date_adds_inputs(self):
-        """!rawnews 2026-02-20 should include target_date in dispatch payload."""
+        """!rawnews test helper to verify target_date payload generation logic."""
         data = {"ref": "main"}
         target_date = "2026-02-20"
         if target_date:
@@ -190,19 +242,17 @@ class TestCheckRawNewsCommand(unittest.TestCase):
         self.assertEqual(data["inputs"]["mode"], "check")
         self.assertEqual(data["inputs"]["target_date"], "2026-02-20")
 
-    def test_invalid_date_on_check(self):
-        """!checkrawnews bad-date should reject with error."""
+    def test_no_date_on_check_sends_view(self):
+        """!checkrawnews with no date should send the interactive view instead of dispatching."""
         async def _test():
-            target_date = "not-a-date"
-            try:
-                datetime.strptime(target_date, "%Y-%m-%d")
-            except ValueError:
-                await self.ctx.send(f"❌ **Invalid date format:** `{target_date}`")
-                return
-        
+            from discord_bot.bot import cmd_check_raw_news, DateSelectionView
+            await cmd_check_raw_news(self.ctx, None)
+            
         run_async(_test())
-        call_content = self.ctx.send.call_args[0][0]
-        self.assertIn("Invalid date format", call_content)
+        self.ctx.send.assert_called_once()
+        call_kwargs = self.ctx.send.call_args[1]
+        self.assertIn('view', call_kwargs)
+        self.assertEqual(type(call_kwargs['view']).__name__, "DateSelectionView")
 
 
 # ═══════════════════════════════════════════════════════

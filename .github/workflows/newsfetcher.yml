@@ -40,6 +40,7 @@ jobs:
           INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           INFISICAL_PROJECT_ID: ${{ secrets.INFISICAL_PROJECT_ID }}
           TARGET_DATE: ${{ github.event.inputs.target_date }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |
           # The main.py is already configured to run with headless=True
           python3 main.py
