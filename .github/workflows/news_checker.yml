@@ -32,5 +32,6 @@ jobs:
           INFISICAL_PROJECT_ID: ${{ secrets.INFISICAL_PROJECT_ID }}
           TARGET_DATE: ${{ github.event.inputs.target_date }}
           MODE: 'CHECK'
+          PREVIOUS_SESSION: 'true'
         run: |
           python3 main.py

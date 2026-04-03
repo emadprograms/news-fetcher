@@ -198,8 +198,17 @@ def run_automation(run_number=1, max_runs=3):
             manual_date_str = None
             
     if not manual_date_str:
-        # Automatic session resolution: post-market close to post-market close
-        target_date, lookback_start, lookback_end = market_utils.MarketCalendar.resolve_trading_session(now_utc)
+        # Check if we should target the PREVIOUS completed session
+        prev_session = os.environ.get("PREVIOUS_SESSION", "").strip().lower() == "true"
+        if prev_session:
+            # Target the most recent COMPLETED trading day (not today's in-progress session)
+            today = now_utc.date()
+            prev_trading_day = market_utils.MarketCalendar.get_prev_trading_day(today)
+            update_log(f"📅 PREVIOUS_SESSION mode: Targeting last completed session → {prev_trading_day}")
+            target_date, lookback_start, lookback_end = market_utils.MarketCalendar.resolve_session_for_date(prev_trading_day, now_utc)
+        else:
+            # Automatic session resolution: post-market close to post-market close
+            target_date, lookback_start, lookback_end = market_utils.MarketCalendar.resolve_trading_session(now_utc)
 
     switch_hour = market_utils.MarketCalendar.get_premarket_switch_hour_utc(target_date)
     update_log(f"⏰ TRADING DATE FOCUS: {target_date} (Switch Hour: {switch_hour}:00 UTC)")
@@ -454,12 +463,19 @@ def run_check_only():
     
     # Resolve Session
     manual_date_str = os.environ.get("TARGET_DATE", "").strip()
+    prev_session = os.environ.get("PREVIOUS_SESSION", "").strip().lower() == "true"
+
     if manual_date_str:
         try:
             manual_date = datetime.datetime.strptime(manual_date_str, "%Y-%m-%d").date()
             target_date, lookback_start, lookback_end = market_utils.MarketCalendar.resolve_session_for_date(manual_date, now_utc)
         except ValueError:
             target_date, lookback_start, lookback_end = market_utils.MarketCalendar.resolve_trading_session(now_utc)
+    elif prev_session:
+        # Match automation logic for PREVIOUS_SESSION
+        today = now_utc.date()
+        prev_trading_day = market_utils.MarketCalendar.get_prev_trading_day(today)
+        target_date, lookback_start, lookback_end = market_utils.MarketCalendar.resolve_session_for_date(prev_trading_day, now_utc)
     else:
         target_date, lookback_start, lookback_end = market_utils.MarketCalendar.resolve_trading_session(now_utc)
 
@@ -509,6 +525,10 @@ MAX_HUNT_RUNS = 3
 COOLDOWN_BETWEEN_RUNS = 30  # seconds
 
 if __name__ == "__main__":
+    # For previous session runs, only run once — the session is complete, no point retrying
+    if os.environ.get("PREVIOUS_SESSION", "").strip().lower() == "true":
+        MAX_HUNT_RUNS = 1
+        update_log("📦 PREVIOUS_SESSION mode: Single run (no retries).")
     # Check if we are in "CHECK" mode
     if os.environ.get("MODE") == "CHECK":
         run_check_only()

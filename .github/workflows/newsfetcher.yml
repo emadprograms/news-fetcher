@@ -2,13 +2,11 @@ name: 🦅 NewsFetcher Hunt (Schedule + Manual)
 
 on:
   schedule:
-    - cron: '17 1 * * *'  # 1:17 AM UTC (Off-peak to avoid Actions queue delay)
-    - cron: '43 1 * * *'  # 1:43 AM UTC (Off-peak)
-    - cron: '11 2 * * *'  # 2:11 AM UTC (Off-peak)
+    - cron: '17 1 * * *'  # 1:17 AM UTC — runs ONCE for the previous trading session
   workflow_dispatch:
     inputs:
       target_date:
-        description: 'Optional: Date to scan (YYYY-MM-DD). If left blank, it automatically runs for the current "Trading Day" using our market-centric logic (e.g. tracking news across weekends/holidays until the market reopens). Only enter a date if you want to force a scan for a specific past day.'
+        description: 'Optional: Date to scan (YYYY-MM-DD). If left blank, it runs for the PREVIOUS trading session (the most recent completed session). Only enter a date to force a specific past day.'
         required: false
         default: ''
 
@@ -41,6 +39,7 @@ jobs:
           INFISICAL_PROJECT_ID: ${{ secrets.INFISICAL_PROJECT_ID }}
           TARGET_DATE: ${{ github.event.inputs.target_date }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
+          PREVIOUS_SESSION: 'true'
         run: |
           # The main.py is already configured to run with headless=True
           python3 main.py
