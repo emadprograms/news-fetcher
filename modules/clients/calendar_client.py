@@ -1,5 +1,5 @@
 
-import investpy # 🚀 Using InvestPy as requested
+# investpy removed due to extreme Cloudflare blocking
 from bs4 import BeautifulSoup
 import time
 
@@ -74,68 +74,85 @@ class CalendarPopulator:
         return c1 + c2
 
     def fetch_economic_calendar(self, start_date):
-        """ Scrapes Economic Calendar using InvestPy (Official Library). """
+        """ Scrapes Economic Calendar from Yahoo Finance using Selenium (Alternative to InvestPy). """
         events = []
+        driver = None
         try:
-            # 1. Date Range
-            end_date = start_date + datetime.timedelta(days=7)
+            print("🚀 Launching Browser for Economic Data Sync...")
+            driver = get_selenium_driver(headless=True)
             
-            from_str = start_date.strftime("%d/%m/%Y")
-            to_str = end_date.strftime("%d/%m/%Y")
-            
-            print(f"🗓️ Syncing via InvestPy ({from_str} - {to_str})...")
-            
-            # 2. Fetch Data
-            df = investpy.economic_calendar(
-                countries=['united states'],
-                from_date=from_str,
-                to_date=to_str,
-                time_zone='GMT'
-            )
-            
-            # 3. Process Rows
-            seen_signatures = set()
-            
-            for index, row in df.iterrows():
-                # 🛡️ DOUBLE CHECK: US Only
-                # Ensure case-insensitive check
-                zone = row['zone'].lower() if row['zone'] else ""
-                if zone != 'united states': continue
-
-                event_name = row['event']
-                date_raw = row['date'] # "dd/mm/yyyy"
+            # Fetch Monday -> Friday (5 Days)
+            for i in range(5):
+                target_date = start_date + datetime.timedelta(days=i)
+                date_str = target_date.strftime("%Y-%m-%d")
+                url = f"{ECO_CALENDAR_URL}?day={date_str}"
                 
-                # Convert date to YYYY-MM-DD for consistency
-                dt_obj = datetime.datetime.strptime(date_raw, "%d/%m/%Y").date()
-                date_iso = dt_obj.strftime("%Y-%m-%d")
+                try:
+                    print(f"   -> Scraping Economic Events for {date_str}...")
+                    driver.set_page_load_timeout(30)
+                    driver.get(url)
+                    time.sleep(3) # Allow JS to load table
+                    
+                    soup = BeautifulSoup(driver.page_source, "html.parser")
+                    
+                    # 🔍 Dynamic Header Mapping
+                    headers = [th.get_text().strip().lower() for th in soup.find_all("th")]
+                    idx_time = 0
+                    idx_event = 1
+                    idx_country = 2
+                    
+                    for idx, h in enumerate(headers):
+                        if "time" in h: idx_time = idx
+                        elif "event" in h: idx_event = idx
+                        elif "country" in h: idx_country = idx
 
-                # Handle missing importance efficiently (pandas sometimes returns NaN which is a float)
-                raw_importance = row['importance']
-                if not isinstance(raw_importance, str) or not raw_importance:
-                    importance = "LOW"
-                else:
-                    importance = str(raw_importance).upper()
-                
-                # Deduplicate
-                sig = (event_name, date_iso)
-                if sig in seen_signatures: continue
-                seen_signatures.add(sig)
+                    rows = soup.find_all("tr")
+                    seen_signatures = set()
+                    
+                    day_count = 0
+                    for row in rows:
+                        cols = row.find_all("td")
+                        if len(cols) < 3: continue
+                        
+                        raw_country = cols[idx_country].get_text().strip()
+                        if "US" not in raw_country and "United States" not in raw_country:
+                            continue
+                            
+                        raw_time = cols[idx_time].get_text().strip()
+                        event_name = cols[idx_event].get_text().strip()
+                        
+                        importance = "MEDIUM" # Default
+                        high_impact_keywords = ["cpi", "ppi", "fomc", "fed", "nonfarm", "employment", "gdp", "pce", "interest rate", "jobless"]
+                        if any(kw in event_name.lower() for kw in high_impact_keywords):
+                            importance = "HIGH"
+                            
+                        # Deduplicate
+                        sig = (event_name, date_str)
+                        if sig in seen_signatures: continue
+                        seen_signatures.add(sig)
 
-                # Filter Logic
-                if importance not in ["HIGH", "MEDIUM"]: continue 
-
-                events.append({
-                    "name": event_name,
-                    "ticker": None,
-                    "type": "MACRO_EVENT",
-                    "date": date_iso,
-                    "importance": importance,
-                    "country": "US", # Explicitly tag as US
-                    "time": str(row['time']) if row['time'] else "TBA"
-                })
-                
+                        events.append({
+                            "name": event_name,
+                            "ticker": None,
+                            "type": "MACRO_EVENT",
+                            "date": date_str,
+                            "importance": importance,
+                            "country": "US",
+                            "time": raw_time if raw_time else "TBA"
+                        })
+                        day_count += 1
+                    print(f"      Found {day_count} US economic events.")
+                except Exception as day_e:
+                    print(f"⚠️ Failed to scrape economic data for {date_str}: {day_e}")
+                    continue
+                    
         except Exception as e:
-            print(f"⚠️ InvestPy Fetch Error: {e}")
+            print(f"⚠️ Economic Data Fetch Error: {e}")
+            
+        finally:
+            if driver:
+                print("🛑 Closing Economic Browser.")
+                force_quit_driver(driver)
             
         return events
 
