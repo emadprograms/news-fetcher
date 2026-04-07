@@ -27,7 +27,7 @@ class InfisicalManager:
                 client_secret = sec.get("client_secret")
                 if not self.project_id: self.project_id = sec.get("project_id")
                 if client_id: print("🛡️ Using Streamlit Secrets.")
-        except:
+        except Exception:
             pass
 
         # 2. Try Env Vars if still missing
@@ -52,7 +52,7 @@ class InfisicalManager:
                     if not self.project_id: self.project_id = sec.get("project_id")
                     if not self.default_env and sec.get("environment"):
                         self.default_env = sec.get("environment")
-            except:
+            except Exception:
                 pass
 
         if client_id and client_secret:
@@ -148,7 +148,7 @@ class InfisicalManager:
                     val = self._extract_value(response)
                     if val is not None:
                         return val
-                except:
+                except Exception:
                     pass
             
             print(f"❌ Failed to fetch secret '{secret_name}' (Env: {env}): {e}")

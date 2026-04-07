@@ -1,8 +1,7 @@
 
 import requests
 import time
-from datetime import datetime
-import random
+from urllib.parse import urlparse
 from modules.utils import market_utils
 from dateutil import parser
 from bs4 import BeautifulSoup
@@ -170,7 +169,7 @@ class MarketAuxEngine:
                                 if domain not in ["finance.yahoo.com", "www.finance.yahoo.com"]:
                                     self.log_callback(f"│   ├── 🛑 SKIPPING: Non-US Domain detected ({domain})")
                                     continue
-                        except:
+                        except Exception:
                             pass
                         
                         
@@ -215,7 +214,7 @@ class MarketAuxEngine:
                                         dt_obj = parser.parse(pub_at)
                                         iso_time = dt_obj.isoformat()
                                         display_time = dt_obj.strftime("%H:%M %Z%z").strip()
-                                    except:
+                                    except Exception:
                                         iso_time = pub_at
                                         display_time = "??:??"
 
@@ -261,7 +260,7 @@ class MarketAuxEngine:
                         try:
                             dt = parser.parse(pub_at)
                             time_str = dt.strftime("%H:%M %Z%z").strip()
-                        except:
+                        except Exception:
                             time_str = "??:??"
 
                         report = {
@@ -300,13 +299,13 @@ class MarketAuxEngine:
                     # 🧹 SANITIZE DRIVER
                     try:
                         if driver: driver.get("about:blank")
-                    except: pass
+                    except Exception: pass
                         
                 except market_utils.DeadDriverException:
                     self.log_callback(f"│   └── ❌ CRITICAL: Browser Frozen/Died. Rebooting Driver...")
                     try:
                         if driver: driver.quit()
-                    except: pass
+                    except Exception: pass
                     try:
                         driver = market_utils.get_selenium_driver()
                         self.log_callback(f"│   └── ♻️ Driver Rebooted Successfully.")
@@ -318,7 +317,7 @@ class MarketAuxEngine:
         finally:
             if driver:
                 try: market_utils.force_quit_driver(driver)
-                except: pass
+                except Exception: pass
             
             # 🏁 ONLY FINISH if we actually completed the loop
             if 'ticker_list' in locals() and len(ticker_list) > 0:
@@ -374,7 +373,7 @@ class MarketAuxEngine:
                     if not lookback_start and not lookback_end:
                         if pub_dt.date() != target_date:
                             continue
-                except: continue
+                except Exception: continue
                 
                 # Title Dedup
                 # Normalization

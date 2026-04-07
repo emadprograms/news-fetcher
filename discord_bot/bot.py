@@ -50,7 +50,7 @@ def get_target_date(date_input: str = None) -> str | None:
             days_back = int(date_input[1:])
             target = today - timedelta(days=days_back)
             return target.strftime("%Y-%m-%d")
-        except: pass
+        except Exception: pass
 
     return date_input # Return as-is for validation later
 
@@ -210,7 +210,7 @@ async def _handle_check_raw_news(interaction_or_ctx, target_date: str):
                     try:
                         response_json = await response.json()
                         error_details = response_json.get("message", "No error message provided")
-                    except:
+                    except Exception:
                         error_details = await response.text()
                     
                     await status_msg.edit(content=f"❌ **Failed to trigger check.**\nGitHub API Error ({response.status}): `{error_details}`\n> **Workflow:** `{CHECK_WORKFLOW}`\n> **Repo:** `{GITHUB_REPO}`")
@@ -291,7 +291,7 @@ async def _handle_trigger_fetch(interaction_or_ctx, target_date: str):
                 # GitHub returns 204 No Content on a successful dispatch
                 if response.status == 204:
                     await status_msg.edit(content="💠 **Transmission Successful!**\n> **NewsFetcher** is initializing... Fetching live link... 📡")
-                    print(f"Triggered fetch via Discord user: {ctx.author}")
+                    print(f"Triggered fetch via Discord user: {interaction_or_ctx}")
                     
                     # Try up to 3 times with 4s wait each (total 12s)
                     live_url = None
@@ -318,7 +318,7 @@ async def _handle_trigger_fetch(interaction_or_ctx, target_date: str):
                     try:
                         response_json = await response.json()
                         error_details = response_json.get("message", "No error message provided")
-                    except:
+                    except Exception:
                         error_details = await response.text()
                     
                     await status_msg.edit(content=f"❌ **Failed to trigger workflow.**\nGitHub API Error ({response.status}): `{error_details}`\n> **Workflow:** `{FETCH_WORKFLOW}`\n> **Repo:** `{GITHUB_REPO}`")

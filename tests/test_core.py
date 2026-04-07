@@ -493,7 +493,7 @@ class TestScanProgressManager(unittest.TestCase):
     def tearDown(self):
         try:
             os.remove(self.tmp.name)
-        except:
+        except Exception:
             pass
 
     def test_initial_state_inactive(self):

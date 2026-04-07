@@ -6,8 +6,8 @@ Uses discord.py's test utilities with mocked HTTP sessions.
 
 import unittest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
-from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime, timedelta, timezone
 import os
 import sys
 
@@ -56,30 +56,7 @@ class TestDateValidation(unittest.TestCase):
         from discord_bot.bot import get_target_date
         self.assertEqual(get_target_date("2026-02-20"), "2026-02-20")
 
-    def test_get_target_date_none(self):
-        """None input should return None to trigger interactive UI."""
-        from discord_bot.bot import get_target_date
-        self.assertIsNone(get_target_date(None))
 
-    def test_get_target_date_today(self):
-        """'0' should return today's UTC date string."""
-        from discord_bot.bot import get_target_date
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        self.assertEqual(get_target_date("0"), today)
-
-    def test_get_target_date_relative(self):
-        """'-1', '-5' should return correct past dates in UTC."""
-        from discord_bot.bot import get_target_date
-        yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
-        self.assertEqual(get_target_date("-1"), yesterday)
-        
-        five_days_back = (datetime.now(timezone.utc) - timedelta(days=5)).strftime("%Y-%m-%d")
-        self.assertEqual(get_target_date("-5"), five_days_back)
-
-    def test_get_target_date_passthrough(self):
-        """'2026-02-20' should pass through as a string for validation later."""
-        from discord_bot.bot import get_target_date
-        self.assertEqual(get_target_date("2026-02-20"), "2026-02-20")
 
     def test_valid_date_parses(self):
         parsed = datetime.strptime("2026-02-20", "%Y-%m-%d")

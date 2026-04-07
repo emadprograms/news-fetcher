@@ -1,11 +1,9 @@
 
-import requests
 import investpy # 🚀 Using InvestPy as requested
 from bs4 import BeautifulSoup
 import time
 
 import datetime
-from dateutil import parser
 from . import db_client
 
 # Static List of Mega-Cap Companies (~$200B+ and Market Movers)
@@ -184,7 +182,7 @@ class CalendarPopulator:
                             elif "Reported EPS" in h: idx_act = i
                             elif "Surprise" in h: idx_surp = i
                         print(f"      Mapped Columns: Est={idx_est}, Act={idx_act}, Surp={idx_surp}")
-                    except:
+                    except Exception:
                         pass
 
                     rows = soup.find_all("tr")

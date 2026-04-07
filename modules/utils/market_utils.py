@@ -35,7 +35,7 @@ def force_quit_driver(driver):
     # 1. Try Graceful Quit first
     try:
         driver.quit()
-    except:
+    except Exception:
         pass
         
     # 2. Hard Kill via PID (Unix/Mac specific)
@@ -229,8 +229,8 @@ def _fetch_yahoo_selenium_impl(driver, url, log_callback):
     """
     try:
         # 0. DOMAIN VALIDATION (No International Yahoo)
-        import urllib3
-        import socket
+        import urllib3  # noqa: F401
+        import socket  # noqa: F401
         
         parsed = urlparse(url)
         domain = parsed.netloc.lower()
@@ -265,7 +265,7 @@ def _fetch_yahoo_selenium_impl(driver, url, log_callback):
                 # Let's verify driver aliveness.
                 try: 
                     _ = driver.current_url
-                except:
+                except Exception:
                     raise DeadDriverException("Driver Died during Fetch")
                 
                 # If driver is alive but fetch failed (e.g. 404, DNS):
@@ -281,7 +281,7 @@ def _fetch_yahoo_selenium_impl(driver, url, log_callback):
                 EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Maybe later') or contains(text(), 'Reject')]"))
             ).click()
             log_callback(f"│   │   │   │   └── 🍪 Dismissed Cookie/Consent Popup.")
-        except:
+        except Exception:
             pass # No popup, continue
         
         # 2. WAIT FOR CONTENT LOAD & MONITOR URL (The Firewall Loop)
@@ -318,7 +318,7 @@ def _fetch_yahoo_selenium_impl(driver, url, log_callback):
                             if "yahoo.com" in l.text or "https://" in l.text:
                                 l.click()
                                 break
-                    except:
+                    except Exception:
                         pass
                     
                     # Check for Consent again (Persistent)
@@ -329,7 +329,7 @@ def _fetch_yahoo_selenium_impl(driver, url, log_callback):
                             if "accept" in txt or "agree" in txt or "consent" in txt:
                                 b.click()
                                 break
-                    except:
+                    except Exception:
                         pass
         
         # 3. FINAL DOMAIN VERIFICATION
@@ -393,7 +393,7 @@ def _fetch_yahoo_selenium_impl(driver, url, log_callback):
                              # "Name, Publisher" format common on Yahoo
                              publisher = auth_name.split(",")[-1].strip()
                         break
-                except:
+                except Exception:
                     continue
             
             # Use HTML Fallbacks only if JSON-LD failed
@@ -428,7 +428,7 @@ def _fetch_yahoo_selenium_impl(driver, url, log_callback):
                                 parts = txt.split("•")
                                 if len(parts) > 0:
                                     publisher = parts[0].strip()
-        except:
+        except Exception:
             pass
 
         # Cleanup Publisher String
@@ -487,7 +487,7 @@ def _fetch_yahoo_selenium_impl(driver, url, log_callback):
 
 def parse_iso_datetime(iso_str):
     try: return parser.parse(iso_str)
-    except: return None
+    except Exception: return None
 
 class MarketCalendar:
     """

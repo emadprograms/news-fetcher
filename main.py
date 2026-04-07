@@ -443,7 +443,7 @@ def run_automation(run_number=1, max_runs=3):
         db.close()
         if analyst_db:
             analyst_db.close()
-    except:
+    except Exception:
         pass
 
     # Return result for multi-run logic
@@ -518,7 +518,7 @@ def run_check_only():
     # Properly Close DB
     try:
         db.close()
-    except:
+    except Exception:
         pass
 
 MAX_HUNT_RUNS = 3

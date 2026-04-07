@@ -260,7 +260,7 @@ def run_macro_scan(target_date, max_pages, log_callback, db=None, cache_map=None
                     try:
                         pub_dt = parser.parse(pub_date_str)
                         pub_date_only = pub_dt.date()
-                    except:
+                    except Exception:
                         continue 
                     
                     # DATE/TIME CHECK (Sliding Window)
@@ -352,7 +352,7 @@ def run_macro_scan(target_date, max_pages, log_callback, db=None, cache_map=None
                             if domain not in ["finance.yahoo.com", "www.finance.yahoo.com"]:
                                 log_callback(f"│   │   └── 🛑 SKIPPING: Non-US Domain detected ({domain})")
                                 continue
-                    except:
+                    except Exception:
                         pass
 
                     # 🚫 FAST URL BLOCKLIST (Avoid Loading Garbage)
@@ -474,7 +474,7 @@ def run_macro_scan(target_date, max_pages, log_callback, db=None, cache_map=None
                             if "yahoo.com" in f_d and f_d not in ["finance.yahoo.com", "www.finance.yahoo.com"]:
                                 log_callback(f"│   │   └── 🛑 FINAL SECURITY BLOCK: Discarding non-US content from {f_d}")
                                 continue
-                        except:
+                        except Exception:
                             pass
 
                         # UNPACK DICT (Handle Legacy List Return for safety)
@@ -522,7 +522,7 @@ def run_macro_scan(target_date, max_pages, log_callback, db=None, cache_map=None
                     # 🧹 SANITIZE DRIVER (Prevent Zombie Hangs)
                     try:
                         if driver: driver.get("about:blank")
-                    except:
+                    except Exception:
                         # Driver is dead — force reboot now instead of continuing with dead driver
                         log_callback(f"│   │   └── 💀 Driver died during sanitization. Rebooting...")
                         market_utils.force_quit_driver(driver)
@@ -541,7 +541,7 @@ def run_macro_scan(target_date, max_pages, log_callback, db=None, cache_map=None
                 scan_errors.append(f"Chrome crashed during feed: {feed_name}")
                 try:
                     if driver: driver.quit()
-                except:
+                except Exception:
                     pass
                 try:
                     driver = market_utils.get_selenium_driver(headless=headless)

@@ -4,7 +4,7 @@ import datetime
 import os
 import sys
 import warnings
-import time
+
 from dateutil import parser as dt_parser
 
 # --- SYSTEM SETUP ---
@@ -163,7 +163,7 @@ def fetch_hunt_logs():
                 "duration": row[8], "errors": row[9]
             })
         return logs
-    except:
+    except Exception:
         return []
 
 # --- MAIN UI ---
@@ -185,7 +185,7 @@ def main():
             try:
                 dt = dt_parser.parse(last_update)
                 st.info(f"🕒 Last article: {dt.strftime('%H:%M %d-%b UTC')}")
-            except: st.info(f"Last Update: {last_update}")
+            except Exception: st.info(f"Last Update: {last_update}")
         else: st.info("No Data in DB")
     with col_info3: st.success(f"📈 {len(available_tickers)} Tickers Monitored")
 

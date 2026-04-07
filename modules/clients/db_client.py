@@ -36,7 +36,7 @@ class NewsDatabase:
         # Check if 'country' column exists (Migration)
         try:
             self.client.execute("SELECT country FROM market_calendar LIMIT 1")
-        except:
+        except Exception:
             print("📦 Migrating Schema: Adding 'country' to market_calendar...")
             try:
                 self.client.execute("ALTER TABLE market_calendar ADD COLUMN country TEXT")
@@ -46,7 +46,7 @@ class NewsDatabase:
         # Check if 'event_time' column exists (Migration)
         try:
             self.client.execute("SELECT event_time FROM market_calendar LIMIT 1")
-        except:
+        except Exception:
             print("📦 Migrating Schema: Adding 'event_time' to market_calendar...")
             try:
                 self.client.execute("ALTER TABLE market_calendar ADD COLUMN event_time TEXT")
@@ -85,7 +85,7 @@ class NewsDatabase:
         # Migration: Add trading_session_date column if missing
         try:
             self.client.execute("SELECT trading_session_date FROM market_news LIMIT 1")
-        except:
+        except Exception:
             print("📦 Migrating Schema: Adding 'trading_session_date' to market_news...")
             try:
                 self.client.execute("ALTER TABLE market_news ADD COLUMN trading_session_date TEXT")
@@ -209,7 +209,7 @@ class NewsDatabase:
         # 💾 EXPLICIT COMMIT (Crucial for Persistence)
         try:
             self.client.commit()
-        except:
+        except Exception:
             pass
             
         return inserted, duplicates
@@ -261,7 +261,7 @@ class NewsDatabase:
                     dt = dt_parser.parse(row[3])
                     dt_utc = dt.astimezone(datetime.timezone.utc)
                     time_str = dt_utc.strftime("%H:%M UTC").strip()
-                except:
+                except Exception:
                     time_str = "??:??"
 
                 publisher_val = row[6] if len(row) > 6 and row[6] else "Unknown"
@@ -371,7 +371,7 @@ class NewsDatabase:
                     # Convert to UTC
                     dt_utc = dt.astimezone(datetime.timezone.utc)
                     time_str = dt_utc.strftime("%H:%M %d-%b UTC")
-                except:
+                except Exception:
                     time_str = "Unknown"
 
                 # row indices: 0=title, 1=url, 2=content, 3=pub, 4=src, 5=cat, 6=publisher
@@ -419,7 +419,7 @@ class NewsDatabase:
                     # Convert to UTC
                     dt_utc = dt.astimezone(datetime.timezone.utc)
                     time_str = dt_utc.strftime("%H:%M %d-%b UTC")
-                except:
+                except Exception:
                     time_str = "Unknown"
 
                 pub_name = row[6] if len(row) > 6 else "Unknown"
@@ -632,5 +632,5 @@ class NewsDatabase:
             try:
                 self.client.close()
                 self.client = None
-            except:
+            except Exception:
                 pass

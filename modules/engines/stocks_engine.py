@@ -155,7 +155,7 @@ def run_stocks_scan(target_date, max_pages, log_callback, db=None, cache_map=Non
                         # Parse full datetime including time
                         pub_dt = parser.parse(pub_date_str)
                         pub_date_only = pub_dt.date()
-                    except:
+                    except Exception:
                         continue 
                     
                     # DATE/TIME CHECK (Sliding Window)
@@ -228,7 +228,7 @@ def run_stocks_scan(target_date, max_pages, log_callback, db=None, cache_map=Non
                             if domain not in ["finance.yahoo.com", "www.finance.yahoo.com"]:
                                 log_callback(f"│   │   └── 🛑 SKIPPING: Non-US Domain detected ({domain})")
                                 continue
-                    except:
+                    except Exception:
                         pass
                         
                     # 🚫 FAST URL BLOCKLIST (Avoid Loading Garbage)
@@ -346,7 +346,7 @@ def run_stocks_scan(target_date, max_pages, log_callback, db=None, cache_map=Non
                             if "yahoo.com" in f_d and f_d not in ["finance.yahoo.com", "www.finance.yahoo.com"]:
                                 log_callback(f"│   │   └── 🛑 FINAL SECURITY BLOCK: Discarding non-US content from {f_d}")
                                 continue
-                        except:
+                        except Exception:
                             pass
 
                         # UNPACK DICT (Handle Legacy List Return for safety)
@@ -417,7 +417,7 @@ def run_stocks_scan(target_date, max_pages, log_callback, db=None, cache_map=Non
                                     "category": category_tag
                                 })
                                 log_callback(f"│   │   └── ⚠️ Saved for Manual Reading.")
-                        except:
+                        except Exception:
                              log_callback(f"│   │   └── ⚠️ Driver error during check. Skipping.")
 
                     log_callback(f"──────────────────────────────────────────────────")
@@ -425,7 +425,7 @@ def run_stocks_scan(target_date, max_pages, log_callback, db=None, cache_map=Non
                     # 🧹 SANITIZE DRIVER
                     try: 
                         if driver: driver.get("about:blank")
-                    except:
+                    except Exception:
                         # Driver is dead — force reboot now
                         log_callback(f"│   │   └── 💀 Driver died during sanitization. Rebooting...")
                         market_utils.force_quit_driver(driver)
@@ -536,7 +536,7 @@ def run_company_specific_scan(target_date, ticker_list, max_pages, log_callback,
                     try:
                         pub_dt = parser.parse(pub_date_str)
                         pub_date_only = pub_dt.date()
-                    except:
+                    except Exception:
                         continue 
                     
                     # DATE/TIME CHECK (Sliding Window)
@@ -614,7 +614,7 @@ def run_company_specific_scan(target_date, ticker_list, max_pages, log_callback,
                             if domain not in ["finance.yahoo.com", "www.finance.yahoo.com"]:
                                 log_callback(f"│   │   └── 🛑 SKIPPING: Non-US Domain detected ({domain})")
                                 continue
-                    except:
+                    except Exception:
                         pass
 
                     if clean_url in seen_urls: 
@@ -660,7 +660,7 @@ def run_company_specific_scan(target_date, ticker_list, max_pages, log_callback,
                             if "yahoo.com" in f_d and f_d not in ["finance.yahoo.com", "www.finance.yahoo.com"]:
                                 log_callback(f"│   │   └── 🛑 FINAL SECURITY BLOCK: Discarding non-US content from {f_d}")
                                 continue
-                        except:
+                        except Exception:
                             pass
 
                         # UNPACK DICT (Safely)
@@ -720,7 +720,7 @@ def run_company_specific_scan(target_date, ticker_list, max_pages, log_callback,
              # 🧹 SANITIZE DRIVER
             try: 
                 if driver: driver.get("about:blank")
-            except: pass
+            except Exception: pass
             
             time.sleep(1)
 
